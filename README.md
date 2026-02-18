@@ -3,6 +3,9 @@ Crypto Volatility Visualizer
 
 A comprehensive Streamlit dashboard for analyzing cryptocurrency volatility using mathematical models and real market data. This project is built as part of the Mathematics for AI-II course (Formative Assessment-2).
 
+App link: https://1000409-mohammed-saif-crypto-volatility-doacfl9e5sneisrgappnsu.streamlit.app/ 
+
+
 🎯 Project Overview
 
 This dashboard allows users to:
