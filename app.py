@@ -55,7 +55,7 @@ def load_and_prepare_data():
     """Load and clean cryptocurrency data."""
     try:
         # Load dataset
-        df = pd.read_csv("crypto_Currency_data.csv")
+        df = pd.read_csv("btcusd_1-min_data.csv.crdownload")
         
         # Check columns
         st.subheader("📊 Dataset Information")
@@ -101,7 +101,7 @@ def load_and_prepare_data():
         return df
     
     except FileNotFoundError:
-        st.error("❌ Error: 'crypto_Currency_data.csv' file not found!")
+        st.error("❌ Error: 'btcusd_1-min_data.csv.crdownload' file not found!")
         st.info("Please upload the cryptocurrency CSV file to continue.")
         return None
     except Exception as e:
