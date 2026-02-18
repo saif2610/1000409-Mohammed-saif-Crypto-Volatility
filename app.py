@@ -55,7 +55,7 @@ def load_and_prepare_data():
     """Load and clean cryptocurrency data."""
     try:
         # Load dataset
-        df = pd.read_csv("btcusd_1-min_data.csv.crdownload")
+        df = pd.read_csv("crypto_Currency_data.csv")
         
         # Check columns
         st.subheader("📊 Dataset Information")
@@ -69,17 +69,25 @@ def load_and_prepare_data():
             st.dataframe(df.head(), use_container_width=True)
         
         # Convert Timestamp from Unix to datetime
-        df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
+        if 'Timestamp' in df.columns:
+            df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
         
         # Rename columns for clarity
-        df = df.rename(columns={
+        rename_dict = {
             'Close': 'Close Price',
             'Open': 'Open Price',
             'High': 'High Price',
             'Low': 'Low Price',
             'Volume_(BTC)': 'Volume BTC',
-            'Volume_(Currency)': 'Volume Currency'
-        })
+            'Volume_BTC': 'Volume BTC',
+            'Volume': 'Volume BTC',
+            'Volume_(Currency)': 'Volume Currency',
+            'Volume_Currency': 'Volume Currency'
+        }
+        
+        # Apply renaming only for columns that exist
+        existing_rename = {k: v for k, v in rename_dict.items() if k in df.columns}
+        df = df.rename(columns=existing_rename)
         
         # Handle missing data
         missing_values = df.isnull().sum()
@@ -88,7 +96,8 @@ def load_and_prepare_data():
             df = df.dropna()
         
         # Sort by timestamp
-        df = df.sort_values('Timestamp').reset_index(drop=True)
+        if 'Timestamp' in df.columns:
+            df = df.sort_values('Timestamp').reset_index(drop=True)
         
         # Subset data based on selection
         if time_range == "Last 1000 records":
@@ -101,7 +110,7 @@ def load_and_prepare_data():
         return df
     
     except FileNotFoundError:
-        st.error("❌ Error: 'btcusd_1-min_data.csv.crdownload' file not found!")
+        st.error("❌ Error: 'crypto_Currency_data.csv' file not found!")
         st.info("Please upload the cryptocurrency CSV file to continue.")
         return None
     except Exception as e:
@@ -116,33 +125,31 @@ def generate_sine_wave(amplitude, frequency, drift, days=365, start_price=1000):
     prices = start_price + amplitude * np.sin(frequency * t) + drift * t + noise
     return prices
 
-def generate_cosine_wave(amplitude, frequency, drift, days=365, start_price=1000):
-    """Generate price data using cosine wave function."""
-    t = np.linspace(0, 4*np.pi, days)
-    noise = np.random.normal(0, amplitude*0.1, days)
-    prices = start_price + amplitude * np.cos(frequency * t) + drift * t + noise
-    return prices
-
 # --- Analysis Functions ---
 def calculate_volatility(df):
     """Calculate volatility index (standard deviation of returns)."""
-    df['Returns'] = df['Close Price'].pct_change()
-    volatility = df['Returns'].std() * 100  # Convert to percentage
-    return volatility
+    if 'Close Price' in df.columns:
+        df['Returns'] = df['Close Price'].pct_change()
+        volatility = df['Returns'].std() * 100  # Convert to percentage
+        return volatility
+    return 0
 
 def calculate_drift(df):
     """Calculate average drift (mean of returns)."""
-    df['Returns'] = df['Close Price'].pct_change()
-    avg_drift = df['Returns'].mean() * 100  # Convert to percentage
-    return avg_drift
+    if 'Close Price' in df.columns:
+        df['Returns'] = df['Close Price'].pct_change()
+        avg_drift = df['Returns'].mean() * 100  # Convert to percentage
+        return avg_drift
+    return 0
 
 def identify_volatility_periods(df, window=20):
     """Identify stable vs volatile periods."""
-    df['Rolling_Std'] = df['Close Price'].rolling(window=window).std()
-    volatility_threshold = df['Rolling_Std'].quantile(0.75)
-    
-    df['Period_Type'] = 'Stable'
-    df.loc[df['Rolling_Std'] > volatility_threshold, 'Period_Type'] = 'Volatile'
+    if 'Close Price' in df.columns:
+        df['Rolling_Std'] = df['Close Price'].rolling(window=window).std()
+        volatility_threshold = df['Rolling_Std'].quantile(0.75)
+        
+        df['Period_Type'] = 'Stable'
+        df.loc[df['Rolling_Std'] > volatility_threshold, 'Period_Type'] = 'Volatile'
     
     return df
 
@@ -156,9 +163,9 @@ if data is not None:
     
     volatility_index = calculate_volatility(data)
     avg_drift = calculate_drift(data)
-    last_price = data['Close Price'].iloc[-1]
-    first_price = data['Close Price'].iloc[0]
-    period_return = ((last_price - first_price) / first_price) * 100
+    last_price = data['Close Price'].iloc[-1] if 'Close Price' in data.columns else 0
+    first_price = data['Close Price'].iloc[0] if 'Close Price' in data.columns else 0
+    period_return = ((last_price - first_price) / first_price) * 100 if first_price > 0 else 0
     
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Volatility Index", f"{volatility_index:.2f}%", 
@@ -301,20 +308,32 @@ if data is not None:
     with tab3:
         st.write("### Volume Analysis")
         
+        # Find volume column
+        volume_column = None
+        for col in data.columns:
+            if 'Volume' in col:
+                volume_column = col
+                break
+        
+        if volume_column is None:
+            st.warning("Volume column not found in the dataset. Using Close Price instead.")
+            volume_column = 'Close Price'
+        
         # Volume Bar Chart
         fig_vol = go.Figure()
         fig_vol.add_trace(go.Bar(
             x=data['Timestamp'],
-            y=data['Volume BTC'],
-            name='Volume (BTC)',
+            y=data[volume_column],
+            name='Volume',
             marker_color='#00CFBE',
-            hovertemplate='Date: %{x}<br>Volume: %{y:,.2f} BTC<extra></extra>'
+            hovertemplate='Date: %{x}<br>Volume: %{y:,.2f}<extra></extra>'
         ))
         
+        volume_label = "BTC" if "BTC" in volume_column else ("USD" if "Currency" in volume_column else "")
         fig_vol.update_layout(
             title="Trading Volume Over Time",
             xaxis_title="Date",
-            yaxis_title="Volume (BTC)",
+            yaxis_title=f"Volume ({volume_label})",
             template="plotly_dark",
             height=500
         )
@@ -322,33 +341,35 @@ if data is not None:
         st.plotly_chart(fig_vol, use_container_width=True)
         
         # Volume Statistics
-        total_volume = data['Volume BTC'].sum()
-        avg_volume = data['Volume BTC'].mean()
-        max_volume = data['Volume BTC'].max()
+        total_volume = data[volume_column].sum()
+        avg_volume = data[volume_column].mean()
+        max_volume = data[volume_column].max()
         
         v1, v2, v3 = st.columns(3)
-        v1.metric("Total Volume", f"{total_volume:,.2f} BTC")
-        v2.metric("Average Volume", f"{avg_volume:,.2f} BTC")
-        v3.metric("Max Volume", f"{max_volume:,.2f} BTC")
+        v1.metric("Total Volume", f"{total_volume:,.2f} {volume_label}")
+        v2.metric("Average Volume", f"{avg_volume:,.2f} {volume_label}")
+        v3.metric("Max Volume", f"{max_volume:,.2f} {volume_label}")
         
         # Correlation Analysis
         st.write("#### Price Change vs Volume Correlation")
         data['Price_Change'] = data['Close Price'].pct_change().abs()
-        correlation = data[['Price_Change', 'Volume BTC']].corr().iloc[0, 1]
+        
+        corr_df = data[['Price_Change', volume_column]].dropna()
+        correlation = corr_df.corr().iloc[0, 1]
         
         st.metric("Correlation Coefficient", f"{correlation:.4f}",
                  help="Measures relationship between price volatility and trading volume")
         
         fig_corr = px.scatter(
             data,
-            x='Volume BTC',
+            x=volume_column,
             y='Price_Change',
             title="Price Change vs Trading Volume",
             template="plotly_dark",
             opacity=0.6
         )
         fig_corr.update_layout(
-            xaxis_title="Volume (BTC)",
+            xaxis_title=f"Volume ({volume_label})",
             yaxis_title="Price Change (Absolute)"
         )
         st.plotly_chart(fig_corr, use_container_width=True)
